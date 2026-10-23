@@ -1,12 +1,19 @@
-FROM mlocati/php-extension-installer:latest AS php_extensions
-
 FROM php:8.2-cli
 
-# Copy all required PHP extensions installer helper
-COPY --from=php_extensions /usr/bin/install-php-extensions /usr/local/bin/
+# Install system dependencies and PHP extensions
+RUN apt-get update && apt-get install -y \
+    libpq-dev \
+    git \
+    curl \
+    unzip \
+    libpng-dev \
+    libonig-dev \
+    libxml2-dev \
+    && docker-php-ext-install pdo pdo_pgsql mbstring bcmath gd
 
-# Install all extensions Laravel and Svelte/Node projects commonly need
-RUN install-php-extensions pdo_pgsql pgsql mbstring bcmath xml gd zip intl
+# Install Node.js
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -15,8 +22,12 @@ WORKDIR /var/www/html
 
 COPY . .
 
-# Run composer install with ignore platform reqs just in case
-RUN composer install --no-dev --optimize-autoloader
+# Run composer with full debugging and ignore platform requirements to bypass strict version blocks
+ENV COMPOSER_MEMORY_LIMIT=-1
+RUN composer install --no-dev --optimize-autoloader -v
+
+# Install Node frontend dependencies and build assets
+RUN npm install && npm run build
 
 EXPOSE 10000
 
